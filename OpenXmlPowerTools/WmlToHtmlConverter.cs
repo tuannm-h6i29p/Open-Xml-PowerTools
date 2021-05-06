@@ -366,6 +366,17 @@ namespace OpenXmlPowerTools
             }
         }
 
+        private static bool HasAPageBreak(XElement element)
+        {
+            if (element != null && element.Descendants() != null)
+            {
+                var validElements = element.Descendants().Where(el => el.Name == W.br).ToList();
+                return validElements.Descendants().Any(dl => dl != null && dl.Attribute(W.type).Value != null && dl.Attribute(W.type).Value == "page");
+
+            }
+            return false;
+        }
+
         private static object ConvertToHtmlTransform(WordprocessingDocument wordDoc,
             WmlToHtmlConverterSettings settings, XNode node,
             bool suppressTrailingWhiteSpace,
@@ -439,7 +450,14 @@ namespace OpenXmlPowerTools
             // Transform contents of runs.
             if (element.Name == W.r)
             {
-                return ConvertRun(wordDoc, settings, element);
+                if (HasAPageBreak(element)) //Page break must happen in the parent of the element ( in HTML). So no runs then.
+                {
+                    return ProcessPageBreak(element);
+                }
+                else
+                {
+                    return ConvertRun(wordDoc, settings, element);
+                }
             }
 
             // Transform w:bookmarkStart into anchor
@@ -647,8 +665,25 @@ namespace OpenXmlPowerTools
             return span;
         }
 
+        private static object ProcessPageBreak(XElement element)
+        {
+            XElement div = new XElement(Xhtml.div);
+            div.SetAttributeValue(NoNamespace.style, "page-break-before:always;");
+            XElement span = null;
+
+            return new object[]
+            {
+                div,
+                new XEntity("#x200e"),
+                span
+         };
+        }
+
         private static object ProcessBreak(XElement element)
         {
+            if (element.Name == W.br && element.Attribute(W.type)?.Value == "page") 
+                return ProcessPageBreak(element);
+
             XElement span = null;
             var tabWidth = (decimal?) element.Attribute(PtOpenXml.TabWidth);
             if (tabWidth != null)
